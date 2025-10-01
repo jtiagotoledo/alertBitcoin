@@ -11,7 +11,7 @@ const transporter = nodemailer.createTransport({
 });
 
 let ultimoPreco = null;
-const ALVO_VARIACAO = 0.1; 
+const ALVO_VARIACAO = 1; 
 const INTERVALO_MINUTOS = 10;
 
 async function checarPreco() {
