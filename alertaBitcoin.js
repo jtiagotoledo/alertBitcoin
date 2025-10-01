@@ -2,7 +2,6 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { pegarPrecoBTCBRL } = require('./modules/binance');
 
-// Configuração do transporte SMTP
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -11,24 +10,47 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Variável global para controlar último preço
 let ultimoPreco = null;
+const ALVO_VARIACAO = 0.1; 
+const INTERVALO_MINUTOS = 10;
 
-// Função principal de checagem
 async function checarPreco() {
   const precoAtual = await pegarPrecoBTCBRL();
   if (!precoAtual) return;
 
-  // Só envia e-mail se houver variação > 500 BRL
-  if (ultimoPreco === null || Math.abs(precoAtual - ultimoPreco) > 500) {
+  let enviarAlerta = false;
+  let mensagem = '';
+
+  if (ultimoPreco === null) {
+    enviarAlerta = true;
+    mensagem = `Preço inicial do BTC: R$${precoAtual.toFixed(2)}`;
+  } else {
+    const variacaoPercentual = ((precoAtual - ultimoPreco) / ultimoPreco) * 100;
+
+    if (Math.abs(variacaoPercentual) >= ALVO_VARIACAO) {
+      enviarAlerta = true;
+
+      if (variacaoPercentual > 0) {
+        mensagem = `⬆️ O preço do BTC AUMENTOU ${variacaoPercentual.toFixed(2)}%\n` +
+                   `Último preço: R$${ultimoPreco.toFixed(2)}\n` +
+                   `Preço atual: R$${precoAtual.toFixed(2)}`;
+      } else {
+        mensagem = `⬇️ O preço do BTC DIMINUIU ${Math.abs(variacaoPercentual).toFixed(2)}%\n` +
+                   `Último preço: R$${ultimoPreco.toFixed(2)}\n` +
+                   `Preço atual: R$${precoAtual.toFixed(2)}`;
+      }
+    }
+  }
+
+  if (enviarAlerta) {
     try {
       await transporter.sendMail({
         from: process.env.EMAIL,
         to: process.env.EMAIL,
-        subject: 'Alerta Bitcoin BRL',
-        text: `O preço atual do BTC é R$${precoAtual.toFixed(2)}`
+        subject: '📢 Alerta Bitcoin BRL',
+        text: mensagem
       });
-      console.log(`[${new Date().toISOString()}] E-mail enviado: R$${precoAtual.toFixed(2)}`);
+      console.log(`[${new Date().toISOString()}] E-mail enviado: ${mensagem}`);
     } catch (err) {
       console.error('Erro ao enviar e-mail:', err.message);
     }
@@ -37,8 +59,6 @@ async function checarPreco() {
   ultimoPreco = precoAtual;
 }
 
-// Executa imediatamente ao iniciar
 checarPreco();
 
-// Executa a cada 2 minutos
-setInterval(checarPreco, 2 * 60 * 1000);
+setInterval(checarPreco, INTERVALO_MINUTOS * 60 * 1000);
